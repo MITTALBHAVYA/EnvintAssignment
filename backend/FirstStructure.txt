@@ -1,0 +1,721 @@
+this is initial directory structure i would consider
+```
+backend
+|-config
+| |-databases
+| | |-mongoconn.js
+| | |-redis.js
+|-controllers
+| |-authController.js
+| |-userController.js
+| |-financialController.js
+|-middleware
+| |-authMiddlerware.js
+| |-catchAsyncErrors.js
+| |-errorHandler.js
+| |-rateLimiter.js
+|-models
+| |-financialModel.js
+| |-passwordResetModel.js
+| |-userModel.js
+|-node_modules
+|-routes
+| |-authRoutes.js
+| |-userRoutes.js
+| |-financialRoutes.js
+|-utils
+| |-logger.js
+|-services
+| |-EmailService.js
+| |-jwtServices.js
+|-test
+| |-financialRoutes.test.js
+|-workers
+| |-financialQueue.js
+| |-financialWorker.js
+|-.env
+|-.gitignore
+|-app.js
+|-package-lock.json
+|-package.json
+|-README.md
+|-server.js
+|-test.js
+```
+
+here is the code snippet
+```
+//mongoconn.js
+import mongoose from "mongoose";
+const mongoConnection = async () => {
+    try {
+        await mongoose.connect(process.env.MONGO_URI, {
+            dbName: "envintFinance",
+            serverSelectionTimeoutMS: 5000
+        });
+        console.log("MongoDB connected successfully.");
+    } catch (err) {
+        console.log(`MongoDB connection error: ${err}`);
+        process.exit(1);
+    }
+};
+export default mongoConnection;
+
+//redis.js
+import Redis from 'ioredis';
+const redis = new Redis({
+    host: process.env.REDIS_HOST,
+    port: 6379
+});
+redis.on("connect", () => { // Use 'on' instead of 'io'
+    console.log("Redis connected successfully.");
+});
+redis.on("error", (err) => {
+    console.log(`Redis connection error: ${err}`);
+});
+export default redis;
+
+//authController.js
+import User from "../models/userModel.js";
+import bcrypt from 'bcrypt';
+import JwtService from '../services/jwtServices.js';
+import { catchAsyncErrors } from '../middleware/catchAsyncErrors.js';
+import ErrorHandler from '../middleware/errorHandler.js';
+import EmailService from "../services/EmailService.js";
+import crypto from 'crypto';
+import { PasswordReset } from "../models/passwordResetModel.js";
+
+export const register = catchAsyncErrors(async (req, res, next) => {
+    const { username, email, password } = req.body;
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+        return next(new ErrorHandler("User already exists with this email", 400));
+    }
+    const user = await User.create({ username, email, password });
+    const user_id = user._id;
+    const token = JwtService.generateToken(user);
+    JwtService.sendToken(user, 201, res, "User registered successfully");
+});
+
+export const login = catchAsyncErrors(async (req, res, next) => {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+        return next(new ErrorHandler("1. Invalid email or password", 401));
+    }
+    const isPasswordValid = await user.comparePassword(password);
+    if (!isPasswordValid) {
+        return next(new ErrorHandler("2. Invalid email or password", 401));
+    }
+    const token = JwtService.generateToken(user);
+    JwtService.sendToken(user, 200, res, "Login successful");
+});
+
+export const logout = catchAsyncErrors(async (req, res, next) => {
+    res
+        .status(200)
+        .cookie("token", "", {
+            expires: new Date(Date.now()),
+            httpOnly: true,
+            sameSite: 'Strict',
+        })
+        .json({
+            success: true,
+            message: "Logged out successfully.",
+        });
+});
+
+export const forgotPassword = catchAsyncErrors(async (req, res, next) => {
+    const { email } = req.body;
+    const user = await User.findOne({ email } );
+    if (!user) {
+        return next(new ErrorHandler("User not found with this email", 404));
+    }
+    const { _id } = user;
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    const resetPasswordToken = crypto
+        .createHash('sha256')
+        .update(resetToken)
+        .digest('hex');
+    const resetPasswordExpire = Date.now() + 15 * 60 * 1000;
+    const user_id = _id.toString();
+    const delPrev = await PasswordReset.deleteMany({ user_id });
+    const passwordResetData = await PasswordReset.create({ user_id, resetPasswordToken, resetPasswordExpire });
+    const emailSubject = `Password Reset Request`;
+    const resetUrl = `${process.env.FRONTEND_URL}/auth/reset-password/${resetToken}`;
+    const emailMessage = `You requested a password reset. Click here to reset your password: ${resetUrl}\n\n If you did not request this, please ignore this email.`;
+    try {
+        const emailService = new EmailService({
+            recipientEmail: email,
+            emailSubject,
+            emailMessage,
+        });
+        await emailService.sendEmail();
+
+        res.status(200).json({
+            success: true,
+            message: 'Password reset token sent to email',
+        })
+    } catch (error) {
+        return next(new ErrorHandler("Email could not be sent", 500));
+    }
+});
+export const resetPassword = catchAsyncErrors(async (req, res, next) => {
+    if (!req.body.password || !req.body.confirmPassword) {
+        return next(new ErrorHandler("Please provide a password and confirm it", 400));
+    }
+    if (req.body.password.length < 8) {
+        return next(new ErrorHandler("Password must be at least 8 characters long", 400));
+    }
+    if (req.body.password !== req.body.confirmPassword) {
+        return next(new ErrorHandler("Passwords do not match", 400));
+    }
+    const resetPasswordToken = crypto
+        .createHash('sha256')
+        .update(req.params.token)
+        .digest('hex');
+    const passwordResetData = await PasswordReset.findOne({
+        resetPasswordToken,
+        resetPasswordExpire: { $gt: Date.now() }
+    });
+    if (!passwordResetData) {
+        return next(new ErrorHandler("Password reset token is invalid or has expired", 400));
+    }
+    const { user_id } = passwordResetData;
+    await PasswordReset.deleteOne({ user_id });
+    const user = await User.findOne({ _id: user_id});
+    if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+    }
+    try {
+        user.password = req.body.password;
+    } catch (error) {
+        return next(new ErrorHandler("Error hashing password", 500));
+    }
+    await user.save();
+    JwtService.sendToken(user, 200, res, "Password reset successful");
+});
+
+//financialController.js
+import { financialQueue } from "../workers/financialQueue.js";
+import FinancialData from "../models/financialModel.js";
+import { catchAsyncErrors } from '../middleware/catchAsyncErrors.js';
+import ErrorHandler from '../middleware/errorHandler.js';
+
+export const uploadFinancialData = catchAsyncErrors(async (req, res,next) => {
+    const data = req.body.data;
+    if (!Array.isArray(data) || data.length > 500) {
+        return next(new ErrorHandler("Max 500 records allowed per request.", 400));
+    }
+    const jobs = data.map(record => ({ name: record.company_id, data: record }));
+    await financialQueue.addBulk(jobs);
+    res.status(200).json({ 
+        success: true, 
+        message: "Data processing started." 
+    });
+});
+
+export const getRiskAssessment = catchAsyncErrors(async (req, res, next) => {
+    const { company_id, reporting_period, industry_sector } = req.query;
+    const query = {};
+    if (company_id) query.company_id = company_id;
+    if (reporting_period) query.reporting_period = reporting_period;
+    if (industry_sector) query.industry_sector = industry_sector;
+    const data = await FinancialData.find(query).limit(50);
+    res.status(200).json({ 
+        success: true, 
+        data 
+    });
+});
+
+//userController.js
+import User from "../models/userModel.js";
+import bcrypt from 'bcrypt';
+import JwtService from '../services/jwtServices.js';
+import { catchAsyncErrors } from '../middleware/catchAsyncErrors.js';
+import ErrorHandler from '../middleware/errorHandler.js';
+
+export const changePassword = catchAsyncErrors(async (req, res, next) => {
+    const { currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+    }
+    // Compare current password
+    const isPasswordValid = await user.comparePassword(currentPassword);
+    if (!isPasswordValid) {
+        return next(new ErrorHandler("Current password is incorrect", 401));
+    }
+    user.password = newPassword;
+    await user.save({ validateBeforeSave: false });
+    JwtService.sendToken(user, 200, res, "Password changed successfully");
+});
+
+export const updateProfile = catchAsyncErrors(async (req, res, next) => {
+    const { username, email } = req.body;
+    let updateFields = {};
+    if (username) updateFields.username = username;
+    if (email) {
+        const emailExists = await User.findOne({ email });
+        if (emailExists && emailExists._id.toString() !== req.user.id) {
+            return next(new ErrorHandler("Email already in use", 400));
+        }
+        updateFields.email = email;
+    }
+    const user = await User.findByIdAndUpdate(req.user.id, updateFields, { 
+        new: true, 
+        runValidators: true 
+    });
+    res.status(200).json({
+        success: true,
+        message: "Profile updated successfully",
+        user: {
+            id: user._id,
+            username: user.username,
+            email: user.email
+        }
+    });
+});
+export const deleteCurrUser = catchAsyncErrors(async (req, res, next) => {
+    const user_id = req.user.id;
+    const user = await User.deleteOne({ _id: user_id });
+    res.status(200).json({ success: true, user});
+});
+export const getCurrentUser = catchAsyncErrors(async (req, res, next) => {
+    const user = await User.findById(req.user.id, 'id username email'); 
+    if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    res.status(200).json({ success: true, user });
+});
+
+//authMiddleWare.js
+import { catchAsyncErrors } from "./catchAsyncErrors.js";
+import jwt from "jsonwebtoken";
+import User from "../models/userModel.js";
+import ErrorHandler from './errorHandler.js';
+
+export const isAuthorized = catchAsyncErrors(async (req, res, next) => {
+    const token = req.cookies.token || (req.headers.authorization && req.headers.authorization.split(" ")[1]);
+    if (!token) {
+        return next(new ErrorHandler("USER NOT AUTHORIZED", 401));
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+    const user = await User.findById(decoded.id);
+    if (!user) {
+        return next(new ErrorHandler("USER NOT FOUND", 404));
+    }
+    req.user = user;
+    next();
+});
+
+//catchAsyncErrors.js
+export const catchAsyncErrors = (theFunction) => {
+    return (req, res, next) => {
+      Promise.resolve(theFunction(req, res, next)).catch(next);
+    };
+};
+
+//errorHandler.js
+class ErrorHandler extends Error {
+    constructor(message, statusCode) {
+      super(message);
+      this.statusCode = statusCode;
+      this.isOperational = true; // Mark this error as operational
+    }
+  }
+  export const errorMiddleware = (err, req, res, next) => {
+    err.statusCode = err.statusCode || 500;
+    err.message = err.message || "Internal server error.";
+  
+    // Handle specific types of errors
+    if (err.name === "CastError") {
+      const message = `Invalid ${err.path}`;
+      err = new ErrorHandler(message, 400);
+    } else if (err.code === 11000) {
+      const message = `Duplicate ${Object.keys(err.keyValue)} entered.`;
+      err = new ErrorHandler(message, 400);
+    } else if (err.name === "JsonWebTokenError") {
+      const message = `Json Web Token is invalid, try again.`;
+      err = new ErrorHandler(message, 400);
+    } else if (err.name === "TokenExpiredError") {
+      const message = `Json Web Token is expired, try again.`;
+      err = new ErrorHandler(message, 400);
+    }
+    // Send response
+    res.status(err.statusCode).json({
+      success: false,
+      message: err.message,
+      // Include stack trace only in development
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    });
+  };  
+export default ErrorHandler;
+    
+//rateLimiter.js
+import rateLimit from "express-rate-limit";
+export const rateLimiter = (minutes,maxRequests)=>{
+    return rateLimit({
+        windowMs:minutes*60*1000,
+        max:maxRequests,
+        message:`Too many requests from this IP, please try again after ${minutes} minutes`,
+        headers:true,
+    })
+}
+
+//financialModel.js
+import mongoose from "mongoose";
+
+const financialSchema = new mongoose.Schema({
+    company_id: { type: String, required: true },
+    company_name: { type: String, required: true },
+    reporting_period: { type: String, required: true },
+    industry_sector: { type: String, required: true },
+    total_assets: Number,
+    total_liabilities: Number,
+    revenue: Number,
+    net_profit: Number,
+    debt_to_equity_ratio: Number,
+    cash_flow: Number,
+    operating_margin: Number,
+    return_on_equity: Number,
+    interest_coverage_ratio: Number,
+    z_score: Number,
+    risk_score: Number
+}, { timestamps: true });
+financialSchema.index({ company_id: 1, reporting_period: 1 }, { unique: true });
+export default mongoose.model("FinancialData", financialSchema);
+
+//passwordResetModel.js
+import mongoose from "mongoose";
+
+const passwordResetSchema = new mongoose.Schema({
+    user_id:{
+        type:String,
+        required:true,
+    },
+    resetPasswordToken:{
+        type:String,
+        required:true
+    },
+    resetPasswordExpire:{
+        type:String,
+        required:true
+    }
+});
+export const PasswordReset = mongoose.model("PasswordReset",passwordResetSchema);
+
+//userModel.js
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
+import validator from 'validator';
+import jwt from 'jsonwebtoken';
+
+const userSchema = new mongoose.Schema({
+    username: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    email: {
+        type: String,
+        required: true,
+        unique: true,
+        lowercase: true,
+        validate: [validator.isEmail, "Please provide a valid email"],
+    },
+    password: {
+        type: String,
+        required: true,
+        minlength: 8,
+        maxlength: 20,
+    },
+}, { timestamps: true });
+// Hash password before saving
+userSchema.pre("save", async function (next) {
+    if (!this.isModified("password")) return next();
+    this.password = await bcrypt.hash(this.password, 10);
+    next();
+});
+// Compare passwords
+userSchema.methods.comparePassword = async function (enteredPassword) {
+    return await bcrypt.compare(enteredPassword, this.password);
+};
+// Generate JWT token
+userSchema.methods.getJWTToken = function () {
+    return jwt.sign({ id: this._id }, process.env.JWT_SECRET_KEY, {
+        expiresIn: process.env.JWT_EXPIRE,
+    });
+};
+export default mongoose.model("User", userSchema);
+
+//authRoutes.js
+import express from "express";
+import { register, login, logout, forgotPassword, resetPassword} from "../controllers/authController.js";
+import { rateLimiter } from "../middleware/rateLimiter.js";
+
+const router = express.Router();
+
+router.post("/register",rateLimiter(15,20), register);
+router.post("/login",rateLimiter(15,20), login);
+router.post("/logout", logout);
+router.post("/forgot-password", rateLimiter(15,5),forgotPassword);
+router.put("/reset-password/:token",resetPassword);
+export default router;
+
+//financeRoutes.js
+import express from "express";
+import { uploadFinancialData, getRiskAssessment } from "../controllers/financialController.js";
+import { isAuthorized } from "../middleware/authMiddleware.js";
+
+const router = express.Router();
+
+router.post("/uploadFinancialData", isAuthorized, uploadFinancialData);
+router.get("/getRiskAssessment", isAuthorized, getRiskAssessment);
+
+export default router;
+
+//userRoutes.js
+import express from "express";
+import {changePassword, updateProfile, getCurrentUser,deleteCurrUser} from "../controllers/userController.js"
+import { isAuthorized } from "../middleware/authMiddleware.js";
+
+const router = express.Router();
+
+router.put('/change-password', isAuthorized, changePassword);
+router.put('/me', isAuthorized, updateProfile);
+router.get('/me', isAuthorized, getCurrentUser);
+router.delete('/me',isAuthorized,deleteCurrUser);
+
+export default router;
+
+//EmailService.js
+import nodemailer from "nodemailer";
+class EmailService {
+  constructor({ recipientEmail, emailSubject, emailMessage }) {
+    this.recipientEmail = recipientEmail;
+    this.emailSubject = emailSubject;
+    this.emailMessage = emailMessage;
+
+    this.transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      service: process.env.SMTP_SERVICE, 
+      port: process.env.SMTP_PORT || 587,
+      auth: {
+        user: process.env.SMTP_MAIL,
+        pass: process.env.SMTP_PASSWORD, 
+      },
+    });
+  }
+
+  async sendEmail() {
+    const mailOptions = {
+      from: `"Your App" <${process.env.SMTP_MAIL}>`, 
+      to: this.recipientEmail, 
+      subject: this.emailSubject, 
+      text: this.emailMessage,
+    };
+    try {
+      const info = await this.transporter.sendMail(mailOptions);
+      console.log('Email sent: %s', info.messageId); 
+      return info;
+    } catch (error) {
+      console.error('Error sending email:', error);
+      throw new Error('Email could not be sent');
+    }
+  }
+}
+
+export default EmailService;
+
+//jwtServices.js
+import jwt from 'jsonwebtoken';
+import User from '../models/userModel.js';
+
+class JwtService {
+    // Method to generate a JWT token
+    static generateToken(user) {
+        try {
+            user._id.toString();
+            const userID = user._id.toString();
+            return jwt.sign({ id: userID }, process.env.JWT_SECRET_KEY, {
+                expiresIn: process.env.JWT_EXPIRE,
+            });
+        } catch (error) {
+            throw new Error(`Error generating JWT token : ${error}`);
+        }
+    }
+
+    // Method to verify a JWT token
+    static verifyToken(token) {
+        return new Promise((resolve, reject) => {
+            jwt.verify(token, process.env.JWT_SECRET_KEY, (err, decoded) => {
+                if (err) {
+                    reject(new Error('Invalid or expired token'));
+                } else {
+                    resolve(decoded);
+                }
+            });
+        });
+    }
+
+    // Method to extract the user from the token
+    static async getUserFromToken(token) {
+        try {
+            const decoded = await this.verifyToken(token);
+            const user = await User.findByPk(decoded.id);
+            if (!user) {
+                throw new Error('User not found');
+            }
+            return user;
+        } catch (error) {
+            throw new Error(error.message || 'Unable to retrieve user from token');
+        }
+    }
+    static sendToken(user, statusCode, res, message) {
+        try {
+            const token = this.generateToken(user);
+            const options = {
+                expires: new Date(Date.now() + process.env.COOKIE_EXPIRE * 24 * 60 * 60 * 1000), 
+                httpOnly: true, 
+            };
+            const userData = {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+            };
+            res.status(statusCode)
+                .cookie('token', token, options) 
+                .header('Authorization', `Bearer ${token}`) 
+                .json({
+                    success: true,
+                    user: userData,
+                    message,
+                    token,
+                });
+        } catch (error) {
+            throw new Error('Error sending JWT token');
+        }
+    }
+}
+
+//financeQueue.js
+import { Queue } from "bullmq";
+
+export const financialQueue = new Queue("financialQueue", {
+    connection: {
+        host: process.env.REDIS_HOST || "127.0.0.1",
+        port: 6379
+    }
+});
+
+financialQueue.on("completed", (job, result) => {
+    console.log(`Job ${job.id} completed with result:`, result);
+});
+
+financialQueue.on("failed", (job, err) => {
+    console.error(`Job ${job.id} failed: ${err.message}`);
+});
+
+
+
+//financialWorker.hs
+import { Worker } from "bullmq";
+import FinancialData from "../models/financialModel.js";
+
+const financialWorker = new Worker(
+    "financialQueue",
+    async (job) => {
+        try {
+            console.log(`Processing job ${job.id} with data:`, job.data);
+            await FinancialData.create(job.data);
+            return { success: true };
+        } catch (err) {
+            console.error(`Error processing job ${job.id}: ${err.message}`);
+            throw new Error(`Error processing financial data: ${err.message}`);
+        }
+    },
+    {
+        connection: {
+            host: process.env.REDIS_HOST || "127.0.0.1",
+            port: 6379
+        }
+    }
+);
+
+financialWorker.on("completed", (job, result) => {
+    console.log(`Worker: Job ${job.id} completed with result:`, result);
+});
+
+financialWorker.on("failed", (job, err) => {
+    console.error(`Worker: Job ${job.id} failed: ${err.message}`);
+});
+
+
+//app.js
+import express from 'express';
+import dotenv from 'dotenv';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import { errorMiddleware } from './middleware/errorHandler.js';
+import authRoutes from './routes/authRoutes.js';
+import userRoutes from './routes/userRoutes.js';
+import financialRoutes from './routes/financialRoutes.js';
+import session from 'express-session';
+
+dotenv.config();
+
+const app = express();
+
+app.use(
+  cors({
+    origin:true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true,
+  })
+);
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: true
+}));
+
+
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/user', userRoutes);
+app.use('/api/v1/financial', financialRoutes);
+
+app.use(errorMiddleware); 
+
+export default app;
+
+//server.js
+import http from 'http';
+import app from './app.js';
+import dotenv from 'dotenv';
+import mongoConnection from './config/databases/mongoconn.js';
+
+dotenv.config(); 
+
+const PORT = process.env.PORT || 3000;
+
+async function startServer() {
+  try {
+    await mongoConnection();
+    console.log("MongoDB connection has been established successfully");
+    const server = http.createServer(app);
+    server.listen(PORT,'0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`Server running in ${process.env.NODE_ENV} mode`);
+    });
+  } catch (error) {
+    console.log('Unable to start the server: ', error);
+    process.exit(1);
+  }
+}
+startServer();
