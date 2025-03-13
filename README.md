@@ -15,6 +15,8 @@ This repository contains the backend API for Envint Finance, a financial data pr
 - [Contributing](#contributing)
 - [License](#license)
 
+![alt text](image.png)
+
 ## Project Structure
 ```
 backend/
