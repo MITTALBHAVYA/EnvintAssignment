@@ -10,7 +10,9 @@ class ErrorHandler extends Error {
   export const errorMiddleware = (err, req, res, next) => {
     err.statusCode = err.statusCode || 500;
     err.message = err.message || "Internal server error.";
-  
+
+    logger.error(`[${req.method} ${req.originalUrl}] ${err.message}`);
+    
     // Handle specific types of errors
     if (err.name === "CastError") {
       const message = `Invalid ${err.path}`;

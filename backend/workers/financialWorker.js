@@ -1,7 +1,9 @@
+//financialWorker.js
 import { Worker } from "bullmq";
 import FinancialData from "../models/financialModel.js";
 import mongoConnection from "../config/databases/mongoconn.js";
 import dotenv from 'dotenv';
+import logger from '../utils/logger.js';
 
 dotenv.config();
 
@@ -10,11 +12,11 @@ const financialWorker = new Worker(
     async (job) => {
         await mongoConnection();
         try {
-            console.log(`Processing job ${job.id} with data:`, job.data);
+            logger.info(`Processing job ${job.id} with data:`, job.data);
             await FinancialData.create(job.data);
             return { success: true };
         } catch (err) {
-            console.error(`Error processing job ${job.id}: ${err.message}`);
+            logger.error(`Error processing job ${job.id}: ${err.message}`);
             throw new Error(`Error processing financial data: ${err.message}`);
         }
     },
@@ -27,9 +29,9 @@ const financialWorker = new Worker(
 );
 
 financialWorker.on("completed", (job, result) => {
-    console.log(`Worker: Job ${job.id} completed with result:`, result);
+    logger.info(`Worker: Job ${job.id} completed with result:`, result);
 });
 
 financialWorker.on("failed", (job, err) => {
-    console.error(`Worker: Job ${job.id} failed: ${err.message}`);
+    logger.error(`Worker: Job ${job.id} failed: ${err.message}`);
 });

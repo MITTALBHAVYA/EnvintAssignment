@@ -1,4 +1,4 @@
-this is initial directory structure i would consider
+directory structure : 
 ```
 backend
 |-config
@@ -599,13 +599,17 @@ class JwtService {
     }
 }
 
-//financeQueue.js
+//FinanciaQueue.js
 import { Queue } from "bullmq";
 
 export const financialQueue = new Queue("financialQueue", {
     connection: {
         host: process.env.REDIS_HOST || "127.0.0.1",
         port: 6379
+    },
+    defaultJobOptions: {
+        attempts: 3, 
+        backoff: { type: "exponential", delay: 5000 } 
     }
 });
 
@@ -619,13 +623,18 @@ financialQueue.on("failed", (job, err) => {
 
 
 
-//financialWorker.hs
+//financialWorker.js
 import { Worker } from "bullmq";
 import FinancialData from "../models/financialModel.js";
+import mongoConnection from "../config/databases/mongoconn.js";
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const financialWorker = new Worker(
     "financialQueue",
     async (job) => {
+        await mongoConnection();
         try {
             console.log(`Processing job ${job.id} with data:`, job.data);
             await FinancialData.create(job.data);

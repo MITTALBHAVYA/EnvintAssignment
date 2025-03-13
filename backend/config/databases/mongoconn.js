@@ -1,14 +1,16 @@
 //mongoconn.js
 import mongoose from "mongoose";
+import logger from '../../utils/logger.js';
+
 const mongoConnection = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI, {
             dbName: "envintFinance",
             serverSelectionTimeoutMS: 5000
         });
-        console.log("MongoDB connected successfully.");
+        logger.info("MongoDB connected successfully.");
     } catch (err) {
-        console.log(`MongoDB connection error: ${err}`);
+        logger.error(`MongoDB connection error: ${err}`);
         process.exit(1);
     }
 };

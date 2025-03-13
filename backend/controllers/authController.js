@@ -7,37 +7,52 @@ import ErrorHandler from '../middleware/errorHandler.js';
 import EmailService from "../services/EmailService.js";
 import crypto from 'crypto';
 import { PasswordReset } from "../models/passwordResetModel.js";
+import logger from '../utils/logger.js';
 
 export const register = catchAsyncErrors(async (req, res, next) => {
     const { username, email, password } = req.body;
 
+    logger.info(`Registration attempt for email: ${email}`);
+
     const existingUser = await User.findOne({ email });
     if (existingUser) {
+        logger.warn(`Registration failed: Email already in use - ${email}`);
         return next(new ErrorHandler("User already exists with this email", 400));
     }
     const user = await User.create({ username, email, password });
-    const user_id = user._id;
+    logger.info(`New user registered: ${email}, UserID: ${user._id}`);
+
     const token = JwtService.generateToken(user);
     JwtService.sendToken(user, 201, res, "User registered successfully");
 });
 
 export const login = catchAsyncErrors(async (req, res, next) => {
     const { email, password } = req.body;
+
+    logger.info(`Login attempt for email: ${email}`);
+
     const user = await User.findOne({ email });
     if (!user) {
+        logger.warn(`Login failed: Invalid email - ${email}`);
         return next(new ErrorHandler("1. Invalid email or password", 401));
     }
 
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
+        logger.warn(`Login failed: Incorrect password for ${email}`);
         return next(new ErrorHandler("2. Invalid email or password", 401));
     }
 
     const token = JwtService.generateToken(user);
+
+    logger.info(`User logged in: ${email}, UserID: ${user._id}`);
     JwtService.sendToken(user, 200, res, "Login successful");
 });
 
 export const logout = catchAsyncErrors(async (req, res, next) => {
+
+    logger.info(`User logged out: ${req.user?.email || "Unknown User"}`);
+
     res
         .status(200)
         .cookie("token", "", {
@@ -53,9 +68,13 @@ export const logout = catchAsyncErrors(async (req, res, next) => {
 
 export const forgotPassword = catchAsyncErrors(async (req, res, next) => {
     const { email } = req.body;
+
+    logger.info(`Password reset request initiated for email: ${email}`);
+
     const user = await User.findOne({ email } );
 
     if (!user) {
+        logger.warn(`Password reset failed: No user found with email - ${email}`);
         return next(new ErrorHandler("User not found with this email", 404));
     }
     const { _id } = user;
@@ -79,12 +98,14 @@ export const forgotPassword = catchAsyncErrors(async (req, res, next) => {
             emailMessage,
         });
         await emailService.sendEmail();
+        logger.info(`Password reset email sent to: ${email}`);
 
         res.status(200).json({
             success: true,
             message: 'Password reset token sent to email',
         })
     } catch (error) {
+        logger.error(`Failed to send password reset email to: ${email} - ${error.message}`);
         return next(new ErrorHandler("Email could not be sent", 500));
     }
 });
@@ -113,6 +134,7 @@ export const resetPassword = catchAsyncErrors(async (req, res, next) => {
     });
 
     if (!passwordResetData) {
+        logger.warn(`Invalid or expired password reset token`);
         return next(new ErrorHandler("Password reset token is invalid or has expired", 400));
     }
 
@@ -121,6 +143,7 @@ export const resetPassword = catchAsyncErrors(async (req, res, next) => {
 
     const user = await User.findOne({ _id: user_id});
     if (!user) {
+        logger.warn(`Password reset failed: No user found for reset token`);
         return next(new ErrorHandler("User not found", 404));
     }
 

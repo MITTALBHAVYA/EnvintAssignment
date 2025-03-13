@@ -1,5 +1,6 @@
-//EmailService.js
 import nodemailer from "nodemailer";
+import logger from "../utils/logger.js"; 
+
 class EmailService {
   constructor({ recipientEmail, emailSubject, emailMessage }) {
     this.recipientEmail = recipientEmail;
@@ -15,6 +16,8 @@ class EmailService {
         pass: process.env.SMTP_PASSWORD, 
       },
     });
+
+    logger.info(`EmailService initialized for recipient: ${recipientEmail}`);
   }
 
   async sendEmail() {
@@ -26,12 +29,15 @@ class EmailService {
     };
 
     try {
+      logger.info(`Attempting to send email to ${this.recipientEmail} with subject: "${this.emailSubject}"`);
+
       const info = await this.transporter.sendMail(mailOptions);
-      console.log('Email sent: %s', info.messageId); 
+      logger.info(`Email sent successfully to ${this.recipientEmail} (Message ID: ${info.messageId})`);
+      
       return info;
     } catch (error) {
-      console.error('Error sending email:', error);
-      throw new Error('Email could not be sent');
+      logger.error(`Failed to send email to ${this.recipientEmail} - Error: ${error.message}`);
+      throw new Error("Email could not be sent");
     }
   }
 }
