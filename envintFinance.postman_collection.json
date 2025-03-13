@@ -1,0 +1,324 @@
+{
+	"info": {
+		"_postman_id": "2d12f3f2-e49e-4a68-b2e8-fd63a835a47a",
+		"name": "envintFinance",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "33030603",
+		"_collection_link": "https://restless-eclipse-138743.postman.co/workspace/New-Team-Workspace~c44a7514-3270-4c7e-83a8-b28001f926c1/collection/33030603-2d12f3f2-e49e-4a68-b2e8-fd63a835a47a?action=share&source=collection_link&creator=33030603"
+	},
+	"item": [
+		{
+			"name": "auth",
+			"item": [
+				{
+					"name": "login",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"email\":\"bhavya12mittal@gmail.com\",\r\n    \"password\":\"123456789\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:5000/api/v1/auth/login",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "register",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"username\":\"bhavya\",\r\n    \"email\":\"bhavya12mittal@gmail.com\",\r\n    \"password\":\"123456789\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:5000/api/v1/auth/register",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:5000/api/v1/auth/logout",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"logout"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "forgotpassword",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"email\":\"bhavya12mittal@gmail.com\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:5000/api/v1/auth//forgot-password",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"",
+								"forgot-password"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "resetpassword",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"password\":\"123456789\",\r\n    \"confirmPassword\":\"123456789\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:5000/api/v1/auth/reset-password/189ee3044a5336cb0bade3b5f3b536df4382babb",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"reset-password",
+								"189ee3044a5336cb0bade3b5f3b536df4382babb"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "user",
+			"item": [
+				{
+					"name": "currUser",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:5000/api/v1/user/me",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"api",
+								"v1",
+								"user",
+								"me"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "delUser",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:5000/api/v1/user/me",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"api",
+								"v1",
+								"user",
+								"me"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "updateProfile",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"username\":\"bhavya\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:5000/api/v1/user/me",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"api",
+								"v1",
+								"user",
+								"me"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "finance",
+			"item": [
+				{
+					"name": "getRiskAssessment",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:5000/api/v1/finance/getRiskAssessment",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"api",
+								"v1",
+								"finance",
+								"getRiskAssessment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "uploadFinancialData",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:5000/api/v1/finance/uploadFinancialData",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"api",
+								"v1",
+								"finance",
+								"uploadFinancialData"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "test",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"data\": [\r\n        {\r\n            \"company_id\": \"C12345\",\r\n            \"company_name\": \"TechCorp Ltd.\",\r\n            \"reporting_period\": \"2023-Q4\",\r\n            \"industry_sector\": \"Technology\",\r\n            \"total_assets\": 5000000,\r\n            \"total_liabilities\": 2000000,\r\n            \"revenue\": 1500000,\r\n            \"net_profit\": 300000,\r\n            \"debt_to_equity_ratio\": 1.2,\r\n            \"cash_flow\": 500000,\r\n            \"operating_margin\": 15.0,\r\n            \"return_on_equity\": 10.5,\r\n            \"interest_coverage_ratio\": 3.5,\r\n            \"z_score\": 2.8,\r\n            \"risk_score\": 75\r\n        },\r\n        {\r\n            \"company_id\": \"C67890\",\r\n            \"company_name\": \"RetailCo Inc.\",\r\n            \"reporting_period\": \"2023-Q4\",\r\n            \"industry_sector\": \"Retail\",\r\n            \"total_assets\": 8000000,\r\n            \"total_liabilities\": 6000000,\r\n            \"revenue\": 2500000,\r\n            \"net_profit\": 500000,\r\n            \"debt_to_equity_ratio\": 2.5,\r\n            \"cash_flow\": 700000,\r\n            \"operating_margin\": 10.2,\r\n            \"return_on_equity\": 7.8,\r\n            \"interest_coverage_ratio\": 1.8,\r\n            \"z_score\": 1.5,\r\n            \"risk_score\": 50\r\n        }\r\n    ]\r\n}\r\n",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:5000/api/v1/financial/testUpload",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"api",
+								"v1",
+								"financial",
+								"testUpload"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
