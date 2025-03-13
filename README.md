@@ -113,17 +113,17 @@ backend/
 ## Running the Application
 
 1.  *Start the server:*
-
+```
     bash
     npm run dev # for development
     npm start # for production
-    
+``` 
 
 2.  *Start the worker:*
-
+```
     bash
     node workers/financialWorker.js
-    
+``` 
 
 ## API Endpoints
 
